@@ -1,0 +1,391 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+<title>Workout Log</title>
+<link rel="apple-touch-icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><rect width=%22100%22 height=%22100%22 fill=%22%23161513%22/><text x=%2250%22 y=%2265%22 font-size=%2260%22 text-anchor=%22middle%22 fill=%22%23b3432b%22>%F0%9F%8F%8B</text></svg>" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+<script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+<script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+</head>
+<body style="margin:0;">
+<div id="root"></div>
+<script type="text/babel">
+const { useState, useEffect, useCallback } = React;
+
+window.storage = {
+  async get(key) {
+    const v = localStorage.getItem(key);
+    return v === null ? null : { key, value: v };
+  },
+  async set(key, value) {
+    localStorage.setItem(key, value);
+    return { key, value };
+  },
+};
+
+const DAYS = [
+  {
+    id: 'push', name: 'Push', sub: 'Chest / Shoulders / Tri',
+    exercises: [
+      { id: 'smith_bench', name: 'Smith Machine Bench Press', target: '4x6-10' },
+      { id: 'chest_press', name: 'Chest Press Machine', target: '3x8-12' },
+      { id: 'shoulder_press', name: 'Shoulder Press Machine', target: '3x8-12' },
+      { id: 'lat_raise', name: 'DB Lateral Raise', target: '3x12-15' },
+      { id: 'tri_pushdown', name: 'Cable Tricep Pushdown', target: '3x10-15' },
+      { id: 'ohd_tri', name: 'DB Overhead Tricep Ext', target: '2x10-15' },
+    ],
+  },
+  {
+    id: 'pull', name: 'Pull', sub: 'Back / Biceps',
+    exercises: [
+      { id: 'lat_pulldown', name: 'Lat Pulldown Machine', target: '4x8-12' },
+      { id: 'seated_row', name: 'Seated Cable Row', target: '4x8-12' },
+      { id: 'assist_pullup', name: 'Assisted Pull-Up / Machine Row', target: '3x8-12' },
+      { id: 'bicep_curl', name: 'DB Bicep Curl', target: '3x10-15' },
+      { id: 'face_pull', name: 'Cable Face Pull', target: '3x12-15' },
+      { id: 'hammer_curl', name: 'Hammer Curl', target: '2x10-15' },
+    ],
+  },
+  {
+    id: 'legs', name: 'Legs', sub: 'Quads / Hams / Calves',
+    exercises: [
+      { id: 'smith_squat', name: 'Smith Machine Squat', target: '4x6-10' },
+      { id: 'leg_press', name: 'Leg Press Machine', target: '4x8-12' },
+      { id: 'leg_curl', name: 'Leg Curl Machine', target: '3x10-15' },
+      { id: 'leg_ext', name: 'Leg Extension Machine', target: '3x10-15' },
+      { id: 'calf_raise', name: 'Calf Raise Machine', target: '4x12-15' },
+    ],
+  },
+  {
+    id: 'upper', name: 'Upper', sub: 'Full Upper, Angle 2',
+    exercises: [
+      { id: 'incline_db_press', name: 'Incline DB Press', target: '4x8-12' },
+      { id: 'chest_row', name: 'Chest-Supported Row', target: '4x8-12' },
+      { id: 'db_shoulder_press', name: 'DB Shoulder Press', target: '3x8-12' },
+      { id: 'wide_pulldown', name: 'Lat Pulldown (wide)', target: '3x10-15' },
+      { id: 'curl_tri_superset', name: 'DB Curl + Tri Pushdown', target: '3x12 ea' },
+    ],
+  },
+  {
+    id: 'lower', name: 'Lower+Core', sub: 'Glutes / Core',
+    exercises: [
+      { id: 'leg_press_2', name: 'Leg Press Machine', target: '4x10-15' },
+      { id: 'hip_thrust', name: 'Hip Thrust Machine', target: '3x10-15' },
+      { id: 'lunges', name: 'Walking Lunges (DB)', target: '3x10/leg' },
+      { id: 'calf_raise_2', name: 'Seated Calf Raise', target: '3x15' },
+      { id: 'cable_crunch', name: 'Cable Crunch', target: '3x12-15' },
+      { id: 'plank', name: 'Plank', target: '3x failure' },
+    ],
+  },
+];
+
+const EXTRAS = ['warmup', 'stretch', 'logged'];
+const EXTRA_LABELS = { warmup: 'Warm-up sets done', stretch: 'Stretch / cooldown', logged: 'Session logged' };
+
+function todayISO() {
+  return new Date().toISOString().slice(0, 10);
+}
+function startISO() {
+  const d = new Date();
+  d.setDate(d.getDate() + 1);
+  return d.toISOString().slice(0, 10);
+}
+const START_DATE = startISO();
+function fmtDate(iso) {
+  return new Date(iso + 'T12:00:00').toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' });
+}
+function weekdayDefault(iso) {
+  const wd = new Date(iso + 'T12:00:00').getDay();
+  const map = { 1: 'push', 2: 'pull', 3: 'legs', 4: 'upper', 5: 'lower' };
+  return map[wd] || 'push';
+}
+
+function WorkoutLog() {
+  const [selectedDate, setSelectedDate] = useState(START_DATE);
+  const [selectedDay, setSelectedDay] = useState(weekdayDefault(START_DATE));
+  const [logs, setLogs] = useState({});
+  const [bests, setBests] = useState({});
+  const [loading, setLoading] = useState(true);
+  const [prFlash, setPrFlash] = useState(null);
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const l = await window.storage.get('workout_logs');
+        setLogs(l ? JSON.parse(l.value) : {});
+      } catch { setLogs({}); }
+      try {
+        const b = await window.storage.get('workout_bests');
+        setBests(b ? JSON.parse(b.value) : {});
+      } catch { setBests({}); }
+      setLoading(false);
+    })();
+  }, []);
+
+  const persistLogs = useCallback(async (next) => {
+    setLogs(next);
+    try { await window.storage.set('workout_logs', JSON.stringify(next)); } catch {}
+  }, []);
+  const persistBests = useCallback(async (next) => {
+    setBests(next);
+    try { await window.storage.set('workout_bests', JSON.stringify(next)); } catch {}
+  }, []);
+
+  const key = `${selectedDate}__${selectedDay}`;
+  const dayLog = logs[key] || { exercises: {}, extras: {} };
+
+  const updateExercise = (exId, field, value) => {
+    const cur = dayLog.exercises[exId] || { weight: '', reps: '', sets: 0 };
+    const nextEx = { ...cur, [field]: value };
+    const nextLog = { ...dayLog, exercises: { ...dayLog.exercises, [exId]: nextEx } };
+    persistLogs({ ...logs, [key]: nextLog });
+
+    if (field === 'weight') {
+      const w = parseFloat(value);
+      if (w > 0) {
+        const best = bests[exId] || 0;
+        if (w > best) {
+          persistBests({ ...bests, [exId]: w });
+          setPrFlash(exId);
+          setTimeout(() => setPrFlash(null), 1500);
+        }
+      }
+    }
+  };
+
+  const cycleSets = (exId, target) => {
+    const max = parseInt(target) || 4;
+    const cur = dayLog.exercises[exId] || { weight: '', reps: '', sets: 0 };
+    const nextSets = (cur.sets + 1) > max ? 0 : cur.sets + 1;
+    const nextLog = { ...dayLog, exercises: { ...dayLog.exercises, [exId]: { ...cur, sets: nextSets } } };
+    persistLogs({ ...logs, [key]: nextLog });
+  };
+
+  const toggleExtra = (k) => {
+    const nextLog = { ...dayLog, extras: { ...dayLog.extras, [k]: !dayLog.extras[k] } };
+    persistLogs({ ...logs, [key]: nextLog });
+  };
+
+  const dayDef = DAYS.find((d) => d.id === selectedDay);
+  const totalSets = dayDef.exercises.reduce((s, e) => s + (parseInt(e.target) || 4), 0);
+  const doneSets = dayDef.exercises.reduce((s, e) => s + ((dayLog.exercises[e.id] && dayLog.exercises[e.id].sets) || 0), 0);
+  const pct = totalSets ? Math.round((doneSets / totalSets) * 100) : 0;
+
+  const daysSinceStart = Math.floor((new Date(todayISO() + 'T12:00:00') - new Date(START_DATE + 'T12:00:00')) / 86400000);
+  const stripStartOffset = Math.max(0, daysSinceStart - 3);
+  const last7 = Array.from({ length: 7 }, (_, i) => {
+    const d = new Date(START_DATE + 'T12:00:00');
+    d.setDate(d.getDate() + stripStartOffset + i);
+    return d.toISOString().slice(0, 10);
+  });
+
+  if (loading) {
+    return (
+      <div style={{ background: '#161513', minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#efece4', fontFamily: 'monospace' }}>
+        RACKING WEIGHT…
+      </div>
+    );
+  }
+
+  return (
+    <div style={{
+      minHeight: '100vh',
+      background: '#161513',
+      backgroundImage: 'radial-gradient(circle at 20% 0%, rgba(179,67,43,0.08), transparent 40%), radial-gradient(circle at 80% 100%, rgba(201,162,39,0.05), transparent 40%)',
+      color: '#efece4',
+      fontFamily: "'Oswald', sans-serif",
+      padding: '20px 14px 60px',
+    }}>
+      <style>{`
+        @import url('https://fonts.googleapis.com/css2?family=Anton&family=Oswald:wght@400;500;600;700&family=Space+Mono:wght@400;700&display=swap');
+        * { box-sizing: border-box; }
+        .mono { font-family: 'Space Mono', monospace; }
+        .headline { font-family: 'Anton', sans-serif; }
+        button, input { font-family: inherit; }
+        body { margin: 0; }
+      `}</style>
+
+      <div style={{ textAlign: 'center', marginBottom: 16 }}>
+        <div className="mono" style={{ fontSize: 10, letterSpacing: 4, color: '#c9a227', marginBottom: 4 }}>
+          IRON LOG · 5-DAY SPLIT
+        </div>
+        <div className="headline" style={{ fontSize: 32, letterSpacing: 1, color: '#efece4' }}>
+          WORKOUT LOG
+        </div>
+        <div className="mono" style={{ fontSize: 11, color: '#b3432b', marginTop: 4, letterSpacing: 1 }}>
+          LAUNCH: {fmtDate(START_DATE)}
+        </div>
+      </div>
+
+      <div style={{ display: 'flex', gap: 5, justifyContent: 'center', marginBottom: 14, flexWrap: 'wrap' }}>
+        {last7.map((iso) => {
+          const isSel = iso === selectedDate;
+          return (
+            <button
+              key={iso}
+              onClick={() => { setSelectedDate(iso); setSelectedDay(weekdayDefault(iso)); }}
+              style={{
+                background: isSel ? '#2b241d' : 'transparent',
+                border: `1px solid ${isSel ? '#b3432b' : '#3a352e'}`,
+                borderRadius: 4, padding: '6px 10px', color: '#efece4', cursor: 'pointer',
+              }}
+            >
+              <div className="mono" style={{ fontSize: 9, color: '#8a8478' }}>{fmtDate(iso).split(' ')[0]}</div>
+              <div style={{ fontSize: 13, fontWeight: 600 }}>{iso.slice(8)}</div>
+            </button>
+          );
+        })}
+      </div>
+
+      <div style={{ display: 'flex', gap: 6, justifyContent: 'center', marginBottom: 18, flexWrap: 'wrap' }}>
+        {DAYS.map((d) => {
+          const isSel = d.id === selectedDay;
+          return (
+            <button
+              key={d.id}
+              onClick={() => setSelectedDay(d.id)}
+              style={{
+                background: isSel ? '#b3432b' : '#211d18',
+                border: `1px solid ${isSel ? '#b3432b' : '#3a352e'}`,
+                borderRadius: 6, padding: '8px 12px', color: isSel ? '#161513' : '#efece4',
+                fontWeight: 700, cursor: 'pointer', fontSize: 13, letterSpacing: 0.5,
+              }}
+            >
+              {d.name}
+            </button>
+          );
+        })}
+      </div>
+
+      <div style={{ maxWidth: 480, margin: '0 auto 18px', textAlign: 'center' }}>
+        <div className="mono" style={{ fontSize: 11, color: '#8a8478', marginBottom: 6 }}>
+          {dayDef.sub.toUpperCase()} — {doneSets}/{totalSets} SETS
+        </div>
+        <div style={{ height: 8, background: '#211d18', borderRadius: 4, overflow: 'hidden', border: '1px solid #3a352e' }}>
+          <div style={{
+            width: `${pct}%`, height: '100%',
+            background: pct >= 100 ? '#c9a227' : '#b3432b',
+            transition: 'width 0.3s',
+          }} />
+        </div>
+      </div>
+
+      <div style={{ maxWidth: 480, margin: '0 auto 18px' }}>
+        {dayDef.exercises.map((ex) => {
+          const log = dayLog.exercises[ex.id] || { weight: '', reps: '', sets: 0 };
+          const targetSets = parseInt(ex.target) || 4;
+          const best = bests[ex.id];
+          const isPR = prFlash === ex.id;
+          return (
+            <div key={ex.id} style={{
+              background: '#1c1913', border: `1px solid ${isPR ? '#c9a227' : '#2e2a23'}`,
+              borderRadius: 8, padding: '12px 14px', marginBottom: 8,
+              transition: 'border-color 0.3s',
+            }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 8 }}>
+                <div>
+                  <div style={{ fontSize: 15, fontWeight: 600 }}>{ex.name}</div>
+                  <div className="mono" style={{ fontSize: 11, color: '#8a8478' }}>
+                    Target {ex.target}{best ? ` · Best ${best} lbs` : ''}
+                  </div>
+                </div>
+                {isPR && (
+                  <span className="mono" style={{
+                    background: '#c9a227', color: '#161513', fontSize: 10, fontWeight: 700,
+                    padding: '3px 6px', borderRadius: 4, flexShrink: 0,
+                  }}>PR</span>
+                )}
+              </div>
+
+              <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                <input
+                  type="number" inputMode="decimal" placeholder="lbs"
+                  value={log.weight}
+                  onChange={(e) => updateExercise(ex.id, 'weight', e.target.value)}
+                  style={{
+                    width: 64, background: '#100e0b', border: '1px solid #3a352e', borderRadius: 5,
+                    padding: '7px 8px', color: '#efece4', fontSize: 14,
+                  }}
+                />
+                <span className="mono" style={{ color: '#5c574d', fontSize: 12 }}>lbs ×</span>
+                <input
+                  type="number" inputMode="numeric" placeholder="reps"
+                  value={log.reps}
+                  onChange={(e) => updateExercise(ex.id, 'reps', e.target.value)}
+                  style={{
+                    width: 56, background: '#100e0b', border: '1px solid #3a352e', borderRadius: 5,
+                    padding: '7px 8px', color: '#efece4', fontSize: 14,
+                  }}
+                />
+                <span className="mono" style={{ color: '#5c574d', fontSize: 12 }}>reps</span>
+
+                <button
+                  onClick={() => cycleSets(ex.id, targetSets)}
+                  style={{
+                    marginLeft: 'auto', background: 'transparent', border: 'none', cursor: 'pointer',
+                    display: 'flex', gap: 2, alignItems: 'center', padding: 4,
+                  }}
+                  title="Tap to log a set"
+                >
+                  {Array.from({ length: targetSets }, (_, i) => (
+                    <span key={i} style={{
+                      width: 4, height: 18,
+                      background: i < log.sets ? '#efece4' : '#3a352e',
+                      transform: i === targetSets - 1 ? 'rotate(30deg)' : 'none',
+                      marginLeft: i === targetSets - 1 ? -6 : 0,
+                    }} />
+                  ))}
+                </button>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      <div style={{ maxWidth: 480, margin: '0 auto' }}>
+        {EXTRAS.map((k) => {
+          const on = !!dayLog.extras[k];
+          return (
+            <button
+              key={k}
+              onClick={() => toggleExtra(k)}
+              style={{
+                width: '100%', display: 'flex', alignItems: 'center', gap: 10,
+                background: on ? 'rgba(201,162,39,0.08)' : '#1c1913',
+                border: `1px solid ${on ? '#c9a22755' : '#2e2a23'}`,
+                borderRadius: 6, padding: '9px 12px', marginBottom: 5,
+                color: '#efece4', cursor: 'pointer', textAlign: 'left',
+              }}
+            >
+              <span style={{
+                width: 16, height: 16, borderRadius: 3, flexShrink: 0,
+                border: `2px solid ${on ? '#c9a227' : '#3a352e'}`,
+                background: on ? '#c9a227' : 'transparent',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+              }}>
+                {on && <span style={{ color: '#161513', fontSize: 10, fontWeight: 700 }}>✓</span>}
+              </span>
+              <span style={{ fontSize: 14, textDecoration: on ? 'line-through' : 'none', opacity: on ? 0.7 : 1 }}>
+                {EXTRA_LABELS[k]}
+              </span>
+            </button>
+          );
+        })}
+      </div>
+
+      <div className="mono" style={{ textAlign: 'center', fontSize: 10, color: '#4a453b', marginTop: 24, letterSpacing: 1 }}>
+        TAP THE CHALK MARKS TO LOG SETS · GOLD = PR
+      </div>
+    </div>
+  );
+}
+
+const root = ReactDOM.createRoot(document.getElementById('root'));
+root.render(<WorkoutLog />);
+</script>
+</body>
+</html>

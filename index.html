@@ -1,0 +1,373 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+<title>Lock-In Tracker</title>
+<link rel="apple-touch-icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><rect width=%22100%22 height=%22100%22 fill=%22%23161513%22/><text x=%2250%22 y=%2265%22 font-size=%2260%22 text-anchor=%22middle%22 fill=%22%23e8a13c%22>%E2%9A%99</text></svg>" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+<script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+<script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+</head>
+<body style="margin:0;">
+<div id="root"></div>
+<script type="text/babel">
+const { useState, useEffect, useCallback } = React;
+
+// Storage shim — saves to this phone's browser instead of Claude's cloud storage
+window.storage = {
+  async get(key) {
+    const v = localStorage.getItem(key);
+    return v === null ? null : { key, value: v };
+  },
+  async set(key, value) {
+    localStorage.setItem(key, value);
+    return { key, value };
+  },
+};
+
+const CHECKLIST = [
+  { id: 'wake', time: '7:30 AM', label: 'Wake up', detail: 'Alarm across the room. No phone.', group: 'AM' },
+  { id: 'm1', time: '7:35 AM', label: 'Meal 1', detail: 'GF oats + whole milk + 2 scoop PB + banana + 3 eggs · ~1,300 cal', group: 'AM' },
+  { id: 'ads1', time: '8:15–11:00 AM', label: 'Ads block 1', detail: 'Best hours — money-making work first.', group: 'AM' },
+  { id: 'm2', time: '11:00 AM', label: 'Meal 2', detail: '2 cups rice + 1 lb ground beef + veg · ~1,100 cal', group: 'MID' },
+  { id: 'ads2', time: '11:30 AM–1:00 PM', label: 'Ads block 2', detail: 'Ads / tracker / admin.', group: 'MID' },
+  { id: 'gym', time: '1:00 PM', label: 'Gym', detail: 'Lifting, compound lifts, progressive overload.', group: 'MID' },
+  { id: 'm3', time: '2:30 PM', label: 'Meal 3', detail: 'Milk + 2 scoop PB shake + banana + eggs/meat · ~900 cal', group: 'MID' },
+  { id: 'ads3', time: '3:00–5:00 PM', label: 'Ads block 3', detail: 'Ads / tracker dev.', group: 'PM' },
+  { id: 'm4', time: '5:00 PM', label: 'Meal 4', detail: 'Rice + meat · ~1,000 cal', group: 'PM' },
+  { id: 'ads4', time: '5:30–7:00 PM', label: 'Ads block 4', detail: 'Ads / whatever the day needs.', group: 'PM' },
+  { id: 'm5', time: '7:00 PM', label: 'Meal 5', detail: 'GF bread PB sandwich or shake · ~500 cal', group: 'PM' },
+  { id: 'free', time: '7:15–9:30 PM', label: 'Free time', detail: 'Sewing, Roblox, whatever — yours.', group: 'PM' },
+  { id: 'wind', time: '9:30–10:30 PM', label: 'Wind-down', detail: 'Philosophy / spiritual. Hard stop 10:30.', group: 'PM' },
+  { id: 'bed', time: '11:00 PM', label: 'Sleep', detail: 'Screens off by 10:30. 8.5 hrs to 7:30 wake.', group: 'PM' },
+];
+
+const START_DATE = todayISO_static();
+
+function todayISO_static() {
+  const d = new Date();
+  d.setDate(d.getDate() + 1);
+  return d.toISOString().slice(0, 10);
+}
+
+function todayISO(offset = 0) {
+  const d = new Date();
+  d.setDate(d.getDate() + offset);
+  return d.toISOString().slice(0, 10);
+}
+
+function fmtDay(iso) {
+  const d = new Date(iso + 'T12:00:00');
+  return d.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' });
+}
+
+function LockInTracker() {
+  const [selectedDate, setSelectedDate] = useState(START_DATE);
+  const [entries, setEntries] = useState({});
+  const [weights, setWeights] = useState({});
+  const [weightInput, setWeightInput] = useState('');
+  const [loading, setLoading] = useState(true);
+  const [saveFlash, setSaveFlash] = useState(false);
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const e = await window.storage.get('entries');
+        setEntries(e ? JSON.parse(e.value) : {});
+      } catch { setEntries({}); }
+      try {
+        const w = await window.storage.get('weights');
+        setWeights(w ? JSON.parse(w.value) : {});
+      } catch { setWeights({}); }
+      setLoading(false);
+    })();
+  }, []);
+
+  const persistEntries = useCallback(async (next) => {
+    setEntries(next);
+    try { await window.storage.set('entries', JSON.stringify(next)); } catch {}
+  }, []);
+
+  const persistWeights = useCallback(async (next) => {
+    setWeights(next);
+    try { await window.storage.set('weights', JSON.stringify(next)); } catch {}
+  }, []);
+
+  const toggle = (id) => {
+    const day = entries[selectedDate] || {};
+    const next = { ...entries, [selectedDate]: { ...day, [id]: !day[id] } };
+    persistEntries(next);
+  };
+
+  const logWeight = () => {
+    const val = parseFloat(weightInput);
+    if (!val || val <= 0) return;
+    const next = { ...weights, [selectedDate]: val };
+    persistWeights(next);
+    setWeightInput('');
+    setSaveFlash(true);
+    setTimeout(() => setSaveFlash(false), 900);
+  };
+
+  const dayData = entries[selectedDate] || {};
+  const doneCount = CHECKLIST.filter((c) => dayData[c.id]).length;
+  const pct = Math.round((doneCount / CHECKLIST.length) * 100);
+
+  let streak = 0;
+  for (let i = 0; i < 400; i++) {
+    const iso = todayISO(-i);
+    const d = entries[iso];
+    const complete = d && CHECKLIST.every((c) => d[c.id]);
+    if (complete) streak++;
+    else break;
+  }
+
+  const weightEntries = Object.entries(weights).sort(([a], [b]) => (a < b ? -1 : 1));
+  const firstWeight = weightEntries[0] ? weightEntries[0][1] : undefined;
+  const lastWeight = weightEntries.length ? weightEntries[weightEntries.length - 1][1] : undefined;
+  const delta = firstWeight != null && lastWeight != null ? (lastWeight - firstWeight).toFixed(1) : null;
+
+  const needleAngle = -90 + (pct / 100) * 180;
+
+  const daysSinceStart = Math.floor((new Date(todayISO() + 'T12:00:00') - new Date(START_DATE + 'T12:00:00')) / 86400000);
+  const stripStartOffset = Math.max(0, daysSinceStart - 3);
+  const days7 = Array.from({ length: 7 }, (_, i) => {
+    const d = new Date(START_DATE + 'T12:00:00');
+    d.setDate(d.getDate() + stripStartOffset + i);
+    return d.toISOString().slice(0, 10);
+  });
+
+  if (loading) {
+    return (
+      <div style={{ background: '#14171c', minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#8a8f98', fontFamily: 'monospace' }}>
+        LOADING BUILD SHEET…
+      </div>
+    );
+  }
+
+  return (
+    <div style={{
+      minHeight: '100vh',
+      background: 'radial-gradient(ellipse at top, #1a1e25 0%, #101318 60%)',
+      color: '#e8e6df',
+      fontFamily: "'Oswald', 'Arial Narrow', sans-serif",
+      padding: '20px 14px 60px',
+    }}>
+      <style>{`
+        @import url('https://fonts.googleapis.com/css2?family=Oswald:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap');
+        * { box-sizing: border-box; }
+        .mono { font-family: 'JetBrains Mono', monospace; }
+        .tick { transform-origin: 50% 100%; }
+        button { font-family: inherit; }
+        input { font-family: inherit; }
+        body { margin: 0; }
+      `}</style>
+
+      <div style={{ textAlign: 'center', marginBottom: 18 }}>
+        <div className="mono" style={{ fontSize: 11, letterSpacing: 4, color: '#5b90a8', marginBottom: 2 }}>
+          BUILD SHEET · SPEC 01
+        </div>
+        <div style={{ fontSize: 26, fontWeight: 700, letterSpacing: 1, textTransform: 'uppercase' }}>
+          Lock-In Tracker
+        </div>
+        <div className="mono" style={{ fontSize: 11, color: '#e8a13c', marginTop: 4, letterSpacing: 1 }}>
+          LAUNCH: {fmtDay(START_DATE)}
+        </div>
+      </div>
+
+      <div style={{ display: 'flex', justifyContent: 'center', gap: 14, marginBottom: 18 }}>
+        <div style={{
+          background: 'linear-gradient(180deg,#1c2028,#14171d)',
+          border: '1px solid #2a2f38',
+          borderRadius: 14, padding: '16px 20px', flex: '1 1 0', maxWidth: 220,
+          boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.03)',
+        }}>
+          <svg viewBox="0 0 200 120" width="100%" height="auto">
+            <path d="M 20 110 A 80 80 0 0 1 180 110" fill="none" stroke="#2a2f38" strokeWidth="10" strokeLinecap="round" />
+            <path
+              d="M 20 110 A 80 80 0 0 1 180 110"
+              fill="none"
+              stroke={pct === 100 ? '#e8a13c' : '#4d8fa6'}
+              strokeWidth="10"
+              strokeLinecap="round"
+              strokeDasharray={`${(pct / 100) * 251} 251`}
+            />
+            <g className="tick" transform={`translate(100,110) rotate(${needleAngle})`}>
+              <line x1="0" y1="0" x2="0" y2="-68" stroke="#e8a13c" strokeWidth="3" strokeLinecap="round" />
+              <circle cx="0" cy="0" r="6" fill="#e8a13c" />
+            </g>
+            <text x="100" y="95" textAnchor="middle" fontSize="26" fontWeight="700" fill="#e8e6df" fontFamily="JetBrains Mono, monospace">{pct}%</text>
+          </svg>
+          <div className="mono" style={{ textAlign: 'center', fontSize: 10, letterSpacing: 2, color: '#8a8f98', marginTop: -6 }}>
+            TODAY'S COMPLETION
+          </div>
+        </div>
+
+        <div style={{
+          background: 'linear-gradient(180deg,#1c2028,#14171d)',
+          border: '1px solid #2a2f38',
+          borderRadius: 14, padding: '16px 14px', flex: '1 1 0', maxWidth: 160,
+          display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+        }}>
+          <div className="mono" style={{ fontSize: 10, letterSpacing: 2, color: '#8a8f98', marginBottom: 8 }}>STREAK</div>
+          <div style={{
+            display: 'flex', gap: 3, background: '#0a0c0f', border: '1px solid #2a2f38',
+            borderRadius: 6, padding: '6px 8px',
+          }}>
+            {String(streak).padStart(3, '0').split('').map((d, i) => (
+              <span key={i} className="mono" style={{
+                fontSize: 22, fontWeight: 600, color: '#e8a13c', width: 16, textAlign: 'center',
+              }}>{d}</span>
+            ))}
+          </div>
+          <div className="mono" style={{ fontSize: 10, color: '#5b90a8', marginTop: 8, letterSpacing: 1 }}>DAYS FULL SEND</div>
+        </div>
+      </div>
+
+      <div style={{ display: 'flex', gap: 6, justifyContent: 'center', marginBottom: 18, flexWrap: 'wrap' }}>
+        {days7.map((iso) => {
+          const d = entries[iso] || {};
+          const n = CHECKLIST.filter((c) => d[c.id]).length;
+          const full = n === CHECKLIST.length;
+          const isSel = iso === selectedDate;
+          return (
+            <button
+              key={iso}
+              onClick={() => setSelectedDate(iso)}
+              style={{
+                background: isSel ? '#2a3540' : '#181c22',
+                border: `1px solid ${isSel ? '#4d8fa6' : '#2a2f38'}`,
+                borderRadius: 8, padding: '8px 10px', color: '#e8e6df', cursor: 'pointer',
+                minWidth: 58, textAlign: 'center',
+              }}
+            >
+              <div className="mono" style={{ fontSize: 9, color: '#8a8f98' }}>{fmtDay(iso).split(' ')[0]}</div>
+              <div style={{ fontSize: 13, fontWeight: 600, marginTop: 2 }}>{iso.slice(8)}</div>
+              <div style={{
+                width: 6, height: 6, borderRadius: 3, margin: '5px auto 0',
+                background: full ? '#e8a13c' : n > 0 ? '#4d8fa6' : '#3a3f48',
+              }} />
+            </button>
+          );
+        })}
+      </div>
+
+      <div style={{ maxWidth: 480, margin: '0 auto 18px' }}>
+        <div className="mono" style={{ fontSize: 11, letterSpacing: 2, color: '#5b90a8', marginBottom: 8 }}>
+          {fmtDay(selectedDate).toUpperCase()}
+        </div>
+        {['AM', 'MID', 'PM'].map((group) => (
+          <div key={group} style={{ marginBottom: 10 }}>
+            <div className="mono" style={{ fontSize: 10, letterSpacing: 2, color: '#5c6270', margin: '6px 0 4px' }}>{group}</div>
+            {CHECKLIST.filter((c) => c.group === group).map((c) => {
+              const on = !!dayData[c.id];
+              return (
+                <button
+                  key={c.id}
+                  onClick={() => toggle(c.id)}
+                  style={{
+                    width: '100%', display: 'flex', alignItems: 'center', gap: 10,
+                    background: on ? 'rgba(232,161,60,0.08)' : '#171a20',
+                    border: `1px solid ${on ? '#e8a13c55' : '#22262e'}`,
+                    borderRadius: 8, padding: '10px 12px', marginBottom: 5,
+                    color: '#e8e6df', cursor: 'pointer', textAlign: 'left',
+                  }}
+                >
+                  <span style={{
+                    width: 18, height: 18, borderRadius: 4, flexShrink: 0,
+                    border: `2px solid ${on ? '#e8a13c' : '#3a3f48'}`,
+                    background: on ? '#e8a13c' : 'transparent',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  }}>
+                    {on && <span style={{ color: '#14171d', fontSize: 12, fontWeight: 700 }}>✓</span>}
+                  </span>
+                  <span style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ display: 'flex', gap: 8, alignItems: 'baseline', flexWrap: 'wrap' }}>
+                      <span className="mono" style={{ fontSize: 11, color: '#5b90a8', flexShrink: 0 }}>{c.time}</span>
+                      <span style={{ fontSize: 15, fontWeight: 600, textDecoration: on ? 'line-through' : 'none', opacity: on ? 0.7 : 1 }}>
+                        {c.label}
+                      </span>
+                    </div>
+                    <div style={{ fontSize: 12, color: '#8a8f98', marginTop: 2, opacity: on ? 0.6 : 1 }}>{c.detail}</div>
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        ))}
+      </div>
+
+      <div style={{
+        maxWidth: 480, margin: '0 auto', background: '#171a20', border: '1px solid #22262e',
+        borderRadius: 10, padding: 14,
+      }}>
+        <div className="mono" style={{ fontSize: 11, letterSpacing: 2, color: '#5b90a8', marginBottom: 10 }}>
+          WEIGHT LOG
+        </div>
+        <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
+          <input
+            type="number"
+            inputMode="decimal"
+            placeholder="lbs today"
+            value={weightInput}
+            onChange={(e) => setWeightInput(e.target.value)}
+            style={{
+              flex: 1, background: '#0e1014', border: '1px solid #2a2f38', borderRadius: 6,
+              padding: '9px 10px', color: '#e8e6df', fontSize: 15,
+            }}
+          />
+          <button
+            onClick={logWeight}
+            style={{
+              background: saveFlash ? '#e8a13c' : '#2a3540', border: '1px solid #4d8fa6',
+              borderRadius: 6, padding: '9px 16px', color: saveFlash ? '#14171d' : '#e8e6df',
+              fontWeight: 600, cursor: 'pointer',
+            }}
+          >
+            LOG
+          </button>
+        </div>
+
+        {weightEntries.length > 0 ? (
+          <>
+            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, marginBottom: 10 }} className="mono">
+              <span style={{ color: '#8a8f98' }}>Start: {firstWeight} lbs</span>
+              <span style={{ color: '#8a8f98' }}>Now: {lastWeight} lbs</span>
+              <span style={{ color: delta > 0 ? '#e8a13c' : '#8a8f98' }}>Δ {delta > 0 ? '+' : ''}{delta}</span>
+            </div>
+            <div style={{ display: 'flex', alignItems: 'flex-end', gap: 3, height: 60 }}>
+              {weightEntries.slice(-14).map(([iso, w], i, arr) => {
+                const min = Math.min(...arr.map((x) => x[1]));
+                const max = Math.max(...arr.map((x) => x[1]));
+                const range = max - min || 1;
+                const h = 8 + ((w - min) / range) * 48;
+                return (
+                  <div key={iso} title={`${iso}: ${w}`} style={{
+                    flex: 1, background: '#4d8fa6', height: h, borderRadius: '2px 2px 0 0',
+                    minWidth: 4,
+                  }} />
+                );
+              })}
+            </div>
+          </>
+        ) : (
+          <div className="mono" style={{ fontSize: 12, color: '#5c6270' }}>No entries yet — log your first weigh-in.</div>
+        )}
+      </div>
+
+      <div className="mono" style={{ textAlign: 'center', fontSize: 10, color: '#3a3f48', marginTop: 24, letterSpacing: 1, lineHeight: 1.8 }}>
+        ~4,800 CAL/DAY · 8.5 HRS SLEEP<br />
+        MEAL 1 + ADS BLOCK 1 BEFORE MIRROR OR PHONE — EVERY DAY
+      </div>
+    </div>
+  );
+}
+
+const root = ReactDOM.createRoot(document.getElementById('root'));
+root.render(<LockInTracker />);
+</script>
+</body>
+</html>
