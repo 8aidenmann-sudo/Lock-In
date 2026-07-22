@@ -31,54 +31,54 @@ const DAYS = [
   {
     id: 'push', name: 'Push', sub: 'Chest / Shoulders / Tri',
     exercises: [
-      { id: 'smith_bench', name: 'Smith Machine Bench Press', target: '4x6-10' },
-      { id: 'chest_press', name: 'Chest Press Machine', target: '3x8-12' },
-      { id: 'shoulder_press', name: 'Shoulder Press Machine', target: '3x8-12' },
-      { id: 'lat_raise', name: 'DB Lateral Raise', target: '3x12-15' },
-      { id: 'tri_pushdown', name: 'Cable Tricep Pushdown', target: '3x10-15' },
-      { id: 'ohd_tri', name: 'DB Overhead Tricep Ext', target: '2x10-15' },
+      { id: 'smith_bench', name: 'Smith Machine Bench Press', target: '3x6-8' },
+      { id: 'chest_press', name: 'Chest Press Machine', target: '2x6-8' },
+      { id: 'shoulder_press', name: 'Shoulder Press Machine', target: '2x6-8' },
+      { id: 'lat_raise', name: 'DB Lateral Raise', target: '2x6-8' },
+      { id: 'tri_pushdown', name: 'Cable Tricep Pushdown', target: '2x6-8' },
+      { id: 'ohd_tri', name: 'DB Overhead Tricep Ext', target: '2x6-8' },
     ],
   },
   {
     id: 'pull', name: 'Pull', sub: 'Back / Biceps',
     exercises: [
-      { id: 'lat_pulldown', name: 'Lat Pulldown Machine', target: '4x8-12' },
-      { id: 'seated_row', name: 'Seated Cable Row', target: '4x8-12' },
-      { id: 'assist_pullup', name: 'Assisted Pull-Up / Machine Row', target: '3x8-12' },
-      { id: 'bicep_curl', name: 'DB Bicep Curl', target: '3x10-15' },
-      { id: 'face_pull', name: 'Cable Face Pull', target: '3x12-15' },
-      { id: 'hammer_curl', name: 'Hammer Curl', target: '2x10-15' },
+      { id: 'lat_pulldown', name: 'Lat Pulldown Machine', target: '3x6-8' },
+      { id: 'seated_row', name: 'Seated Cable Row', target: '3x6-8' },
+      { id: 'assist_pullup', name: 'Assisted Pull-Up / Machine Row', target: '2x6-8' },
+      { id: 'bicep_curl', name: 'DB Bicep Curl', target: '2x6-8' },
+      { id: 'face_pull', name: 'Cable Face Pull', target: '2x6-8' },
+      { id: 'hammer_curl', name: 'Hammer Curl', target: '2x6-8' },
     ],
   },
   {
     id: 'legs', name: 'Legs', sub: 'Quads / Hams / Calves',
     exercises: [
-      { id: 'smith_squat', name: 'Smith Machine Squat', target: '4x6-10' },
-      { id: 'leg_press', name: 'Leg Press Machine', target: '4x8-12' },
-      { id: 'leg_curl', name: 'Leg Curl Machine', target: '3x10-15' },
-      { id: 'leg_ext', name: 'Leg Extension Machine', target: '3x10-15' },
-      { id: 'calf_raise', name: 'Calf Raise Machine', target: '4x12-15' },
+      { id: 'smith_squat', name: 'Smith Machine Squat', target: '3x6-8' },
+      { id: 'leg_press', name: 'Leg Press Machine', target: '3x6-8' },
+      { id: 'leg_curl', name: 'Leg Curl Machine', target: '2x6-8' },
+      { id: 'leg_ext', name: 'Leg Extension Machine', target: '2x6-8' },
+      { id: 'calf_raise', name: 'Calf Raise Machine', target: '2x6-8' },
     ],
   },
   {
     id: 'upper', name: 'Upper', sub: 'Full Upper, Angle 2',
     exercises: [
-      { id: 'incline_db_press', name: 'Incline DB Press', target: '4x8-12' },
-      { id: 'chest_row', name: 'Chest-Supported Row', target: '4x8-12' },
-      { id: 'db_shoulder_press', name: 'DB Shoulder Press', target: '3x8-12' },
-      { id: 'wide_pulldown', name: 'Lat Pulldown (wide)', target: '3x10-15' },
-      { id: 'curl_tri_superset', name: 'DB Curl + Tri Pushdown', target: '3x12 ea' },
+      { id: 'incline_db_press', name: 'Incline DB Press', target: '3x6-8' },
+      { id: 'chest_row', name: 'Chest-Supported Row', target: '3x6-8' },
+      { id: 'db_shoulder_press', name: 'DB Shoulder Press', target: '2x6-8' },
+      { id: 'wide_pulldown', name: 'Lat Pulldown (wide)', target: '2x6-8' },
+      { id: 'curl_tri_superset', name: 'DB Curl + Tri Pushdown', target: '2x6-8 ea' },
     ],
   },
   {
     id: 'lower', name: 'Lower+Core', sub: 'Glutes / Core',
     exercises: [
-      { id: 'leg_press_2', name: 'Leg Press Machine', target: '4x10-15' },
-      { id: 'hip_thrust', name: 'Hip Thrust Machine', target: '3x10-15' },
-      { id: 'lunges', name: 'Walking Lunges (DB)', target: '3x10/leg' },
-      { id: 'calf_raise_2', name: 'Seated Calf Raise', target: '3x15' },
-      { id: 'cable_crunch', name: 'Cable Crunch', target: '3x12-15' },
-      { id: 'plank', name: 'Plank', target: '3x failure' },
+      { id: 'leg_press_2', name: 'Leg Press Machine', target: '3x6-8' },
+      { id: 'hip_thrust', name: 'Hip Thrust Machine', target: '2x6-8' },
+      { id: 'lunges', name: 'Walking Lunges (DB)', target: '2x6-8/leg' },
+      { id: 'calf_raise_2', name: 'Seated Calf Raise', target: '2x6-8' },
+      { id: 'cable_crunch', name: 'Cable Crunch', target: '2x6-8' },
+      { id: 'plank', name: 'Plank', target: '2x failure' },
     ],
   },
   {
@@ -390,7 +390,7 @@ function WorkoutLog() {
       </div>
 
       <div className="mono" style={{ textAlign: 'center', fontSize: 10, color: '#4a453b', marginTop: 24, letterSpacing: 1 }}>
-        TAP THE CHALK MARKS TO LOG SETS · GOLD = PR
+        2-3 SETS · 6-8 REPS · LAST SET TO TRUE FAILURE · GOLD = PR
       </div>
     </div>
   );
