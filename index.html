@@ -45,13 +45,7 @@ const CHECKLIST = [
   { id: 'bed', time: '11:00 PM', label: 'Sleep', detail: 'Screens off by 10:30. 8.5 hrs to 7:30 wake.', group: 'PM' },
 ];
 
-const START_DATE = todayISO_static();
-
-function todayISO_static() {
-  const d = new Date();
-  d.setDate(d.getDate() + 1);
-  return d.toISOString().slice(0, 10);
-}
+const START_DATE = '2026-07-22'; // fixed launch date, not recalculated on load
 
 function todayISO(offset = 0) {
   const d = new Date();
